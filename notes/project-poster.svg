@@ -1,72 +1,146 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1520 860" width="1520" height="860"
      font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif">
-<title>AgentLab poster</title>
-<desc>A left to right flow from a plain instruction through the harness and its tools to
-finished work, with three headline figures beneath.</desc>
+<title>EdgeHarness poster</title>
+<desc>One slide: the measured result (66.7 percent versus 43.3 percent task completion),
+why a local agent matters, and the four things the harness does to get there.</desc>
+
+<defs>
+  <filter id="soft" x="-6%" y="-14%" width="112%" height="130%">
+    <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#0f172a" flood-opacity="0.06"/>
+  </filter>
+</defs>
 
 <style>
-  .page  { fill: #f7f8fa; }
-  .card  { fill: #ffffff; stroke: #e3e6ec; }
-  .accent{ fill: #3355ff; }
-  .h1    { fill: #0f172a; font-size: 72px; font-weight: 800; letter-spacing: -1.6px; }
-  .sub   { fill: #64748b; font-size: 23px; }
-  .stage { fill: #0f172a; font-size: 30px; font-weight: 750; }
-  .stagew{ fill: #ffffff; font-size: 30px; font-weight: 750; }
-  .cap   { fill: #64748b; font-size: 15.5px; }
-  .capw  { fill: #c7d2fe; font-size: 15.5px; }
-  .big   { fill: #3355ff; font-size: 76px; font-weight: 800; letter-spacing: -1.5px; }
-  .claim { fill: #0f172a; font-size: 19px; font-weight: 700; }
-  .under { fill: #64748b; font-size: 15.5px; }
-  .foot  { fill: #94a3b8; font-size: 14.5px;
-           font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .page   { fill: #f7f8fb; }
+  .card   { fill: #ffffff; stroke: #e6e9f0; stroke-width: 1.2; }
+  .tintb  { fill: #eef2ff; }
+  .tintg  { fill: #f1f3f8; }
+  .accent { fill: #3355ff; }
+  .chip   { fill: #2440cc; }
+  .track  { fill: #eef1f6; }
+  .neutral{ fill: #94a3b8; }
+
+  .eyeb   { fill: #3355ff; font-size: 12.5px; font-weight: 800; letter-spacing: 1.9px; }
+  .eyebw  { fill: #c7d2fe; font-size: 12px;   font-weight: 800; letter-spacing: 1.7px; }
+  .h1     { fill: #0f172a; font-size: 44px; font-weight: 800; letter-spacing: -1.1px; }
+  .sub    { fill: #64748b; font-size: 17.5px; }
+  .badge  { fill: #3355ff; font-size: 13.5px; font-weight: 700; }
+
+  .ctitle { fill: #0f172a; font-size: 16.5px; font-weight: 700; }
+  .blabel { fill: #0f172a; font-size: 15.5px; font-weight: 700; }
+  .bvalue { fill: #0f172a; font-size: 26px; font-weight: 800; letter-spacing: -0.6px; }
+  .bcount { fill: #94a3b8; font-size: 13.5px; }
+  .note   { fill: #64748b; font-size: 13.5px; }
+
+  .hero   { fill: #ffffff; font-size: 62px; font-weight: 800; letter-spacing: -2px; }
+  .herol  { fill: #dbe3ff; font-size: 15px; font-weight: 600; }
+  .chipk  { fill: #b9c6ff; font-size: 11.5px; font-weight: 700; letter-spacing: 1.2px; }
+  .chipv  { fill: #ffffff; font-size: 17px; font-weight: 800; }
+
+  .why    { fill: #334155; font-size: 15.5px; }
+  .num    { fill: #3355ff; font-size: 22px; font-weight: 800; letter-spacing: -0.4px; }
+  .ct     { fill: #0f172a; font-size: 18px; font-weight: 700; }
+  .body   { fill: #4b5563; font-size: 14px; }
+  .foot   { fill: #94a3b8; font-size: 13px; }
 </style>
 
 <rect class="page" x="0" y="0" width="1520" height="860"/>
 
-<text class="h1"  x="68" y="118">Your laptop, doing the work.</text>
-<text class="sub" x="68" y="166">An 8B model that runs a real inbox, calendar and documents. Nothing leaves the machine.</text>
+<!-- header -->
+<text class="eyeb" x="64" y="58">EDGEHARNESS &#183; TEAM WAZEE</text>
+<text class="h1"   x="64" y="100">Your laptop, doing the work.</text>
+<text class="sub"  x="64" y="130">A small local model that runs a real inbox, calendar and documents &#8212; on hardware you own.</text>
 
-<!-- the flow -->
-<rect class="card"   x="68"   y="250" width="298" height="150" rx="14" stroke-width="1.3"/>
-<text class="stage"  x="104"  y="316">You ask</text>
-<text class="cap"    x="104"  y="350">in plain language</text>
+<rect class="tintb" x="1234" y="62" width="222" height="36" rx="18"/>
+<circle class="accent" cx="1258" cy="80" r="4"/>
+<text class="badge" x="1272" y="85">0 prompts leave the laptop</text>
 
-<path class="accent" d="M392 315 L424 325 L392 335 Z"/>
+<!-- result: the bars -->
+<rect class="card" x="64" y="148" width="1052" height="252" rx="18" filter="url(#soft)"/>
+<text class="ctitle" x="96" y="186">Task completion &#8212; same model, same 14 tools, only the control layer changed</text>
 
-<rect class="accent" x="430"  y="250" width="298" height="150" rx="14"/>
-<text class="stagew" x="466"  y="316">The harness</text>
-<text class="capw"   x="466"  y="350">repair · question · verify</text>
+<text class="blabel" x="96"  y="228">Our harness</text>
+<rect class="track"  x="300" y="210" width="580" height="24" rx="6"/>
+<path class="accent" d="M300 210 H683 Q687 210 687 214 V230 Q687 234 683 234 H300 Z"/>
+<text class="bvalue" x="904"  y="232">66.7%</text>
+<text class="bcount" x="1004" y="232">80 / 120</text>
 
-<path class="accent" d="M754 315 L786 325 L754 335 Z"/>
+<text class="blabel"  x="96"  y="284">Native-tool baseline</text>
+<rect class="track"   x="300" y="266" width="580" height="24" rx="6"/>
+<path class="neutral" d="M300 266 H547 Q551 266 551 270 V286 Q551 290 547 290 H300 Z"/>
+<text class="bvalue"  x="904"  y="288">43.3%</text>
+<text class="bcount"  x="1004" y="288">52 / 120</text>
 
-<rect class="card"   x="792"  y="250" width="298" height="150" rx="14" stroke-width="1.3"/>
-<text class="stage"  x="828"  y="316">16 tools</text>
-<text class="cap"    x="828"  y="350">mail · calendar · files</text>
+<line x1="96" y1="316" x2="1084" y2="316" stroke="#eef0f4" stroke-width="1.4"/>
+<text class="note" x="96" y="342">120 paired contexts &#183; 240 runs &#183; order-balanced A/B &#183; hidden grader &#183; only a complete final state counts as a pass</text>
+<text class="note" x="96" y="368">Holds under stress: +18.3 pts on a six-family reslice, +25.8 pts on fresh seeds. The model never changed &#8212; the harness did.</text>
 
-<path class="accent" d="M1116 315 L1148 325 L1116 335 Z"/>
+<!-- result: the headline delta -->
+<rect class="accent" x="1140" y="148" width="316" height="252" rx="18" filter="url(#soft)"/>
+<text class="eyebw" x="1298" y="190" text-anchor="middle">HARNESS OVER BASELINE</text>
+<text class="hero"  x="1298" y="268" text-anchor="middle">+23.3</text>
+<text class="herol" x="1298" y="296" text-anchor="middle">percentage points</text>
+<rect class="chip"  x="1168" y="316" width="260" height="58" rx="10"/>
+<text class="chipk" x="1298" y="340" text-anchor="middle">95% RANGE</text>
+<text class="chipv" x="1298" y="363" text-anchor="middle">+12.5 to +33.3</text>
 
-<rect class="card"   x="1154" y="250" width="298" height="150" rx="14" stroke-width="1.3"/>
-<text class="stage"  x="1190" y="316">Done</text>
-<text class="cap"    x="1190" y="350">booked · drafted · written</text>
+<!-- the two whys -->
+<rect class="tintg" x="64" y="418" width="684" height="84" rx="12"/>
+<text class="eyeb"  x="92" y="446">WHY IT MATTERS</text>
+<text class="why"   x="92" y="470">Cloud inference is expensive, and frontier labs train on what you send them.</text>
+<text class="why"   x="92" y="492">Mail, calendars and files are exactly what a business cannot hand over.</text>
 
-<!-- the one line that matters -->
-<text class="claim" x="68" y="480" font-size="27">A small model gets the intent right and the format wrong.</text>
-<text class="under" x="68" y="516" font-size="21">The harness fixes the format for free, and spends a model call only on a real decision.</text>
+<rect class="tintb" x="772" y="418" width="684" height="84" rx="12"/>
+<text class="eyeb"  x="800" y="446">WHY WE BUILD IT</text>
+<text class="why"   x="800" y="470">A small model on your own hardware gets the intent right and the format wrong.</text>
+<text class="why"   x="800" y="492">That gap is mechanical, so it closes in Python &#8212; for free &#8212; not in parameters.</text>
 
-<!-- headline figures -->
-<line x1="68" y1="580" x2="1452" y2="580" stroke="#e3e6ec" stroke-width="1.4"/>
+<!-- what we built -->
+<text class="eyeb" x="64" y="536">WHAT WE BUILT</text>
 
-<text class="big"   x="68"   y="690">0</text>
-<text class="claim" x="68"   y="726">Prompts that leave the laptop</text>
-<text class="under" x="68"   y="754">Every token is generated on-device</text>
+<rect class="accent" x="64" y="550" width="330" height="5" rx="2.5"/>
+<rect class="card"   x="64" y="553" width="330" height="237" rx="12"/>
+<text class="num"    x="90" y="596">01</text>
+<text class="ct"     x="90" y="628">Zero-call repair</text>
+<text class="body"   x="90" y="660">Fenced JSON, a trailing comma, to_addr</text>
+<text class="body"   x="90" y="682">for to, &#8220;2pm&#8221; for 14:00, &#8220;tomorrow&#8221;</text>
+<text class="body"   x="90" y="704">for a real date &#8212; extracted, repaired</text>
+<text class="body"   x="90" y="726">and normalized across three Python</text>
+<text class="body"   x="90" y="748">stages. Not one model call is spent</text>
+<text class="body"   x="90" y="770">on format.</text>
 
-<text class="big"   x="560"  y="690">69 → 10</text>
-<text class="claim" x="560"  y="726">Tools loaded when you connect Outlook</text>
-<text class="under" x="560"  y="754">Context is the budget; the harness curates it</text>
+<rect class="accent" x="418" y="550" width="330" height="5" rx="2.5"/>
+<rect class="card"   x="418" y="553" width="330" height="237" rx="12"/>
+<text class="num"    x="444" y="596">02</text>
+<text class="ct"     x="444" y="628">Checks that ask, not block</text>
+<text class="body"   x="444" y="660">A rejection carries the tool&#8217;s own</text>
+<text class="body"   x="444" y="682">example. A date the task never named,</text>
+<text class="body"   x="444" y="704">or a write the plan never proposed, is</text>
+<text class="body"   x="444" y="726">questioned exactly once, then allowed</text>
+<text class="body"   x="444" y="748">if the model insists. A repeat while</text>
+<text class="body"   x="444" y="770">nothing changed is refused.</text>
 
-<text class="big"   x="1120" y="690">4</text>
-<text class="claim" x="1120" y="726">Dependencies</text>
-<text class="under" x="1120" y="754">No agent framework, no build step</text>
+<rect class="accent" x="772" y="550" width="330" height="5" rx="2.5"/>
+<rect class="card"   x="772" y="553" width="330" height="237" rx="12"/>
+<text class="num"    x="798" y="596">03</text>
+<text class="ct"     x="798" y="628">Context is the budget</text>
+<text class="body"   x="798" y="660">An 8B holds 8k tokens, so nothing is</text>
+<text class="body"   x="798" y="682">loaded just in case. Tools arrive by</text>
+<text class="body"   x="798" y="704">mode, memory only on a keyword</text>
+<text class="body"   x="798" y="726">match, old turns are clipped, and</text>
+<text class="body"   x="798" y="748">connecting Outlook exposes 69 tools</text>
+<text class="body"   x="798" y="770">&#8212; we inject the 10 that matter.</text>
 
-<text class="foot" x="68" y="822">Python + vanilla JavaScript &#183; Ollama on loopback &#183; MCP over JSON-RPC</text>
+<rect class="accent" x="1126" y="550" width="330" height="5" rx="2.5"/>
+<rect class="card"   x="1126" y="553" width="330" height="237" rx="12"/>
+<text class="num"    x="1152" y="596">04</text>
+<text class="ct"     x="1152" y="628">Plan first, verify last</text>
+<text class="body"   x="1152" y="660">A tool-grounded plan opens the run;</text>
+<text class="body"   x="1152" y="682">one model call closes it by asking</text>
+<text class="body"   x="1152" y="704">whether the task is really done. Real</text>
+<text class="body"   x="1152" y="726">mail stays draft-first &#8212; the model</text>
+<text class="body"   x="1152" y="748">composes, a person sends &#8212; and</text>
+<text class="body"   x="1152" y="770">every run is logged for audit.</text>
+
+<text class="foot" x="64" y="830">Python + requests &#183; 3,000 lines across 13 modules &#183; 4 pip packages &#183; Ollama on loopback &#183; MCP over JSON-RPC &#183; python-pptx / openpyxl &#183; vanilla-JS live console</text>
 </svg>
