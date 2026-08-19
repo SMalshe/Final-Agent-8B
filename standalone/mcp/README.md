@@ -73,11 +73,26 @@ Three guards, all on by default, all enforced by
 3. **Allow / drop lists** in `servers.json`, per server, overriding the bridge's
    name-based write classifier where it guesses wrong.
 
-Two consequences worth knowing before you demo:
+**Sending is possible, but never by accident.** `--mcp-live` (or Mode → live in
+the Connections menu) adds `send-mail`, `reply-mail-message` and
+`send-draft-message` for the Outlook servers. Each is still confirmed
+per-call with the full payload shown, and `--yolo` is the only way to skip that
+— do not combine `--yolo` with `--mcp-live` on an account you care about.
+
+`send-draft-message` is the safest of the three: the agent composes, you read the
+draft in Outlook, and only then does it send.
+
+Three consequences worth knowing before you demo:
 
 - **Teams is read-only in draft mode.** There is no such thing as a Teams draft,
   so every way to put a message in front of a person is a transmit tool and all
   of them get dropped. Reading chats works. Posting needs `--mcp-live`.
+- **The transmit regex over-matches.** `create-reply-draft` and
+  `create-forward-draft` only compose a draft, but they contain "reply" and
+  "forward", so draft mode dropped them — the agent could write a fresh mail but
+  not draft a *reply*, which is the more common request. Naming a tool in
+  `write_tools` exempts it from the draft filter while keeping it confirmed;
+  that is what the Outlook entries now do.
 - **Guard 1 is a regex over tool names.** A server whose send tool is named
   something `_TRANSMIT_RE` doesn't match would be exposed in draft mode. Run
   `--mcp-list` against any server you add and read the classification yourself:

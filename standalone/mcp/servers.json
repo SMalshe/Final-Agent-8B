@@ -89,9 +89,11 @@
       "list-mail-folder-messages", "create-draft-email",
       "list-calendars", "list-calendar-events", "get-calendar-event",
       "get-calendar-view", "create-calendar-event"
-    ],
+    ,
+      "create-reply-draft", "create-reply-all-draft", "create-forward-draft", "send-mail", "reply-mail-message", "send-draft-message"],
     "write_tools": ["copy-mail-message", "dismiss-calendar-event-reminder",
-                    "snooze-calendar-event-reminder"],
+                    "snooze-calendar-event-reminder",
+                    "create-reply-draft", "create-reply-all-draft", "create-forward-draft"],
     "read_tools": ["get-mailbox-settings"],
     "notes": [
       "Measured, not guessed: `--mcp ms365 --mcp-list` against the real server",
@@ -129,9 +131,11 @@
       "list-mail-folder-messages", "create-draft-email",
       "list-calendars", "list-calendar-events", "get-calendar-event",
       "get-calendar-view", "create-calendar-event"
-    ],
+    ,
+      "create-reply-draft", "create-reply-all-draft", "create-forward-draft", "send-mail", "reply-mail-message", "send-draft-message"],
     "write_tools": ["copy-mail-message", "dismiss-calendar-event-reminder",
-                    "snooze-calendar-event-reminder"],
+                    "snooze-calendar-event-reminder",
+                    "create-reply-draft", "create-reply-all-draft", "create-forward-draft"],
     "read_tools": ["get-mailbox-settings"],
     "notes": [
       "Use this, not 'ms365', for a personal Microsoft account. The server's own",
