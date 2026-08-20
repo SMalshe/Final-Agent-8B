@@ -1491,3 +1491,17 @@ table.grid td.formula::after { content: ' ƒ'; font-size: 9px; color: var(--ink-
   display: flex; justify-content: space-between; align-items: center;
   gap: 12px; margin-top: 24px;
 }
+
+/* -------------------------------------------------------- step sentences ---
+   What a step was, in words. The tool name and arguments are still a click
+   away in .step-detail; this is what someone who asked a question reads. */
+.step-line { color: var(--ink-dim); font-size: 13.5px; line-height: 1.5; }
+.step-line.step-bad { color: var(--bad); }
+.step-detail { margin-top: 4px; }
+.step-detail > summary {
+  cursor: pointer; list-style: none; color: var(--ink-faint);
+  font-size: 11.5px; letter-spacing: .02em; padding: 1px 0;
+}
+.step-detail > summary::-webkit-details-marker { display: none; }
+.step-detail > summary:hover { color: var(--ink-dim); }
+.step-detail[open] > summary { margin-bottom: 4px; }

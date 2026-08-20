@@ -39,6 +39,7 @@ from harness import fs_tools  # noqa: E402
 from harness import llm as llm_mod  # noqa: E402
 from harness import mcp_bridge  # noqa: E402
 from harness import mcp_config  # noqa: E402
+from harness import narrate  # noqa: E402
 from harness import profiles  # noqa: E402
 from harness.tuner import run_metrics  # noqa: E402
 from harness import tools as tools_mod  # noqa: E402
@@ -338,6 +339,7 @@ def main():
     # like one. Appended, never assigned: --root and --mcp may already have put
     # their rules in.
     agent_mod.EXTRA_RULES += chat.reply_rules()
+    chat.enable_say()      # the tool those rules are about
     agent_mod.MAX_CALLS = call_budget(profile,
                                       override=args.max_calls or cfg.get("max_calls"),
                                       extended=bool(root or names))
@@ -395,7 +397,13 @@ def main():
         emit("note", kind=kind, content=content)
 
     def on_tool(name, args_, ok, obs):
-        emit("tool", name=name, args=args_, ok=ok, result=obs)
+        # `line` is the step said in a sentence (harness/narrate.py). It rides
+        # along with the tool event so the phrasing has one source rather than
+        # a copy of the table in JavaScript, and so a tool an MCP server
+        # invented is described by the same rule as a built-in one.
+        line = (narrate.about(name, args_, done=True) if ok
+                else narrate.failed(name, args_, obs))
+        emit("tool", name=name, args=args_, ok=ok, result=obs, line=line)
         emit("world", **world_snapshot(world, mem, root))
 
     llm_mod.STREAM_HOOK = on_stream

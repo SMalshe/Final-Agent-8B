@@ -1025,8 +1025,20 @@ function onNote(e) {
   if (k === 'done') doneSummary = e.content;
 }
 
+/* A message the agent chose to send, rendered as a turn in the conversation
+   rather than as a row in a log — it is speech, not a step. */
+function onSay(e) {
+  const text = String((e.args || {}).text || '').trim();
+  if (!text) return;
+  const n = push('act has-tool');
+  const turn = el('div', 'turn assistant');
+  turn.append(el('div', 'turn-text', text));
+  n.append(turn);
+}
+
 function onTool(e) {
   if (e.name === 'think') return;
+  if (e.name === 'say') return onSay(e);
   const mut = MUTATORS.has(e.name);
   /* A failed mutator used to get the green "made" dot, so a create_deck that
      wrote nothing looked exactly like one that worked. Failure outranks
@@ -1041,7 +1053,19 @@ function onTool(e) {
   row.append(el('span', 'nm', e.name),
              el('span', 'arg', arg == null ? '' : clip(typeof arg === 'string' ? arg : JSON.stringify(arg), 90)),
              el('span', 'out', e.ok ? (mut ? 'written' : 'completed') : 'failed'));
-  n.append(row);
+  /* The sentence leads (harness/narrate.py sends it); the tool name and its
+     arguments move behind a disclosure. Both readings stay available — one for
+     the person who asked about their Thursday, one for whoever is debugging
+     the loop — but the log is no longer the only thing on offer. */
+  if (e.line) {
+    n.append(el('div', 'step-line' + (e.ok ? '' : ' step-bad'), e.line));
+    const det = el('details', 'step-detail');
+    det.append(el('summary', null, 'details'));
+    det.append(row);
+    n.append(det);
+  } else {
+    n.append(row);
+  }
   /* Why it failed is the whole point of showing the failure. */
   if (!e.ok) n.append(el('div', 'reason', clip(e.result, 600)));
 

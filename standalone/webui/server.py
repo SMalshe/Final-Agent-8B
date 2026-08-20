@@ -620,7 +620,13 @@ class Runs:
         tid = run.options.get("thread")
         if tid:
             end = next((e for e in reversed(run.events) if e.get("t") == "end"), None)
-            if end and end.get("summary"):
+            spoken = chat.said(run.events)
+            if spoken:
+                # A run that already spoke keeps what it said. Appending the
+                # done summary underneath would paste a summary of the message
+                # below the message.
+                reply = "\n\n".join(spoken)
+            elif end and end.get("summary"):
                 reply = end["summary"]
             elif run.status == "stopped":
                 reply = "(stopped)"

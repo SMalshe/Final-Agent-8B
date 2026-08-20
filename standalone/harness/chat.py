@@ -138,29 +138,85 @@ def prompt_block(msgs, k=DEFAULT_TURNS):
 
 
 def reply_rules():
-    """Prompt text that makes done's summary something said to a person.
+    """Prompt text for a run that is a conversation rather than an errand.
 
-    That summary is the only part of a run the person reads - server.py stores
-    it as the assistant's turn - but the tool doc asks for a "short summary" and
-    shows one written like a log line, so that is what comes back: "Recalled
-    user's favourite colour as teal from memory." It reports on them in the
-    third person and buries the answer inside a description of finding it.
+    Two things it has to establish. First, that not every message is a job:
+    the loop's contract is one tool call per reply, so without a way to simply
+    talk, "morning, what can you do?" becomes a hunt through the inbox for an
+    answer that was never in there. say() is that way.
+
+    Second, the voice. The summary done() carries is the only part of a run the
+    person reads - server.py stores it as the assistant's turn - but the tool
+    doc asks for a "short summary" and shows one written like a log line, so
+    that is what came back: "Recalled user's favourite colour as teal from
+    memory." Third person, and the answer buried inside an account of finding
+    it.
 
     Kept out of the shared prompt deliberately. bench/ grades runs whose prompt
-    must not move, and the CLI is a task tool where a terse line is the right
-    output. Only the chat surface appends this.
+    must not move, and the CLI is a task tool where a terse line is right. Only
+    the chat surface appends this.
 
-    The instruction stays abstract for the reason agent.py's RULES do: concrete
-    example content in an instruction is an attractor a small model will copy
-    verbatim into an answer where it does not belong. Shape, not sentences.
+    It stays abstract for the reason agent.py's RULES do: concrete example
+    content in an instruction is an attractor a small model copies verbatim,
+    and a specimen answer inside an instruction about answering is the worst
+    possible place for one. Shape, not sentences.
     """
     return """
 
-HOW TO WRITE THE SUMMARY YOU PASS TO done:
-It is shown to the person as your reply, and it is the only part of this run
-they see. Write it to them, not about them.
+YOU ARE IN A CONVERSATION:
+- say is how you talk to the person. It sends them a message and nothing else.
+- Not every message needs a tool. A greeting, something you were just told,
+  something you already know, or a question back at them: say it, then call
+  done. Do not go looking through the inbox or the calendar for an answer that
+  is not in them.
+- Use the other tools only when the request really does need the inbox, the
+  calendar, a file or a document. Then use them without asking permission.
+- You do not need to narrate the steps. The person can see what you are doing.
+
+HOW TO WRITE WHAT YOU SAY, in say and in the summary you pass to done:
 - Say "you" and "I". Never "the user".
 - If they asked a question, the first sentence IS the answer. Do not describe
   looking it up, recalling it, or checking it - just answer.
-- Do not list the tools you called or narrate the steps; they watched them.
-- One or two plain sentences. No preamble, no sign-off."""
+- One or two plain sentences. No preamble, no sign-off.
+- If you already answered with say, the summary can be a few words: they have
+  read your message already."""
+
+
+SAY = {
+    "desc": "Send the person a message right now. Use it to answer, ask, or "
+            "explain when the request needs nothing but words.",
+    "params": {"text": ("string, what you want to say, in your own words", True)},
+    "example": {"tool": "say", "args": {"text": "<what you want to tell them>"}},
+    # The message IS the effect: the UI renders it from the call, and the
+    # observation only has to confirm it left. Echoing the text back would put
+    # a second copy of it in the context for no gain.
+    "run": lambda world, memory, args: "sent",
+}
+
+
+def enable_say():
+    """Add say to the registry. Chat surfaces only - the same opt-in shape
+    fs_tools and mcp_bridge use, so bench/ keeps its own tool list."""
+    from .tools import TOOLS
+    TOOLS["say"] = SAY
+
+
+def disable_say():
+    from .tools import TOOLS
+    TOOLS.pop("say", None)
+
+
+def said(events):
+    """Everything the agent said during a run, in order.
+
+    server.py stores this as the assistant's turn when there is any, because a
+    run that already spoke should not have a summary of itself pasted
+    underneath it.
+    """
+    out = []
+    for e in events:
+        if e.get("t") == "tool" and e.get("name") == "say":
+            text = str((e.get("args") or {}).get("text") or "").strip()
+            if text:
+                out.append(text)
+    return out
