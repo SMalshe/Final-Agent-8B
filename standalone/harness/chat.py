@@ -135,3 +135,32 @@ def prompt_block(msgs, k=DEFAULT_TURNS):
         lines.append(f"{who}: {text}")
     return ("\n\nEARLIER IN THIS CONVERSATION (for context; the task below is what "
             "you must do now):\n" + "\n".join(lines))
+
+
+def reply_rules():
+    """Prompt text that makes done's summary something said to a person.
+
+    That summary is the only part of a run the person reads - server.py stores
+    it as the assistant's turn - but the tool doc asks for a "short summary" and
+    shows one written like a log line, so that is what comes back: "Recalled
+    user's favourite colour as teal from memory." It reports on them in the
+    third person and buries the answer inside a description of finding it.
+
+    Kept out of the shared prompt deliberately. bench/ grades runs whose prompt
+    must not move, and the CLI is a task tool where a terse line is the right
+    output. Only the chat surface appends this.
+
+    The instruction stays abstract for the reason agent.py's RULES do: concrete
+    example content in an instruction is an attractor a small model will copy
+    verbatim into an answer where it does not belong. Shape, not sentences.
+    """
+    return """
+
+HOW TO WRITE THE SUMMARY YOU PASS TO done:
+It is shown to the person as your reply, and it is the only part of this run
+they see. Write it to them, not about them.
+- Say "you" and "I". Never "the user".
+- If they asked a question, the first sentence IS the answer. Do not describe
+  looking it up, recalling it, or checking it - just answer.
+- Do not list the tools you called or narrate the steps; they watched them.
+- One or two plain sentences. No preamble, no sign-off."""

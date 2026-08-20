@@ -334,6 +334,10 @@ def main():
         today = datetime.date.today()
         agent_mod.SIM_TODAY = today
         agent_mod.SIM_TODAY_HUMAN = today.strftime("%A, %B %d, %Y")
+    # The web UI is a conversation, so the reply the person reads should sound
+    # like one. Appended, never assigned: --root and --mcp may already have put
+    # their rules in.
+    agent_mod.EXTRA_RULES += chat.reply_rules()
     agent_mod.MAX_CALLS = call_budget(profile,
                                       override=args.max_calls or cfg.get("max_calls"),
                                       extended=bool(root or names))
