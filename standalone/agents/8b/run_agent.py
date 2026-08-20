@@ -56,6 +56,7 @@ from harness import fs_tools  # noqa: E402
 from harness import mcp_bridge  # noqa: E402
 from harness import mcp_config  # noqa: E402
 from harness import profiles  # noqa: E402
+from harness.tuner import run_metrics  # noqa: E402
 from harness.agent import run_harness  # noqa: E402
 from harness.llm import LLM, OLLAMA_URL  # noqa: E402
 from harness.memory import MemoryStore  # noqa: E402
@@ -308,10 +309,15 @@ def main():
     n = len(os.listdir(log_dir)) + 1
     log_path = os.path.join(log_dir, f"run_{n:03d}.json")
     with open(log_path, "w", encoding="utf-8") as f:
-        json.dump({"task": task, "root": root, "transcript": ep.transcript,
+        json.dump({"task": task, "root": root, "model": cfg["model"], "via": "cli",
+                   "transcript": ep.transcript,
                    "finished": ep.finished, "summary": ep.done_summary,
                    "mcp": ({"servers": names, "mode": mcp_run_mode}
-                           if names else None)}, f,
+                           if names else None),
+                   # Same shape the web UI writes, so harness/tuner.py reads one
+                   # log format however the run was started.
+                   "profile": dict(profile.to_dict(), max_calls=agent_mod.MAX_CALLS),
+                   "metrics": run_metrics(ep, llm, agent_mod.MAX_CALLS)}, f,
                   indent=1, ensure_ascii=False)
     print(f"transcript: {log_path}")
 

@@ -40,6 +40,7 @@ from harness import llm as llm_mod  # noqa: E402
 from harness import mcp_bridge  # noqa: E402
 from harness import mcp_config  # noqa: E402
 from harness import profiles  # noqa: E402
+from harness.tuner import run_metrics  # noqa: E402
 from harness import tools as tools_mod  # noqa: E402
 from harness.agent import run_harness  # noqa: E402
 from harness.llm import LLM, OLLAMA_URL  # noqa: E402
@@ -412,7 +413,14 @@ def main():
                    "model": cfg["model"], "via": "webui",
                    "mcp": {"servers": names, "mode": mcp_mode} if names else None,
                    "transcript": ep.transcript, "finished": ep.finished,
-                   "summary": ep.done_summary}, f, indent=1, ensure_ascii=False)
+                   "summary": ep.done_summary,
+                   # The same numbers the "end" event below streams to the
+                   # browser, persisted. They are what harness/tuner.py reads:
+                   # a run that only leaves a transcript behind can be watched
+                   # but not learned from.
+                   "profile": dict(profile.to_dict(), max_calls=agent_mod.MAX_CALLS),
+                   "metrics": run_metrics(ep, llm, agent_mod.MAX_CALLS)},
+                  f, indent=1, ensure_ascii=False)
 
     emit("world", **world_snapshot(world, mem, root))
     emit("end", finished=ep.finished, summary=ep.done_summary,
