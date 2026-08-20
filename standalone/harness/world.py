@@ -103,12 +103,14 @@ class World:
             self.emails = state.get("emails", [dict(e) for e in EMAILS])
             self.events = state.get("events", [dict(e) for e in CALENDAR])
             self.sent_emails = state.get("sent_emails", [])
+            self.drafts = state.get("drafts", [])
             self.messages = state.get("messages", [])
             self.reminders = state.get("reminders", [])
         else:
             self.emails = [dict(e) for e in EMAILS]
             self.events = [dict(e) for e in CALENDAR]
             self.sent_emails = []
+            self.drafts = []
             self.messages = []
             self.reminders = []
         self.actions = []  # log of every mutating/inspecting tool call (per episode)
@@ -140,6 +142,40 @@ class World:
         rec = {"to": to.strip(), "subject": str(subject or ""), "body": str(body or "")}
         self.sent_emails.append(rec)
         return rec
+
+    def list_sent(self):
+        """What has been sent, newest last - the order it went out in.
+
+        The world has always kept this and nothing could read it, so an agent
+        asked "did I already reply to Dana?" had to guess, and a second run had
+        no way to see what the first one sent.
+        """
+        return [{"n": i + 1, "to": e["to"], "subject": e["subject"],
+                 "preview": " ".join(str(e.get("body", "")).split())[:120]}
+                for i, e in enumerate(self.sent_emails)]
+
+    def save_draft(self, to, subject, body):
+        """Compose without sending. Deliberately the only half of it the agent
+        gets: sending a draft is the person's move, the same rule mcp_bridge's
+        draft mode holds real accounts to."""
+        if not to or not isinstance(to, str):
+            raise ToolError("'to' must be a recipient email address string")
+        rec = {"id": f"d{len(self.drafts) + 1}", "to": to.strip(),
+               "subject": str(subject or ""), "body": str(body or "")}
+        self.drafts.append(rec)
+        return rec
+
+    def list_drafts(self):
+        return [{"id": d["id"], "to": d["to"], "subject": d["subject"]}
+                for d in self.drafts]
+
+    def read_draft(self, draft_id):
+        if not isinstance(draft_id, str):
+            raise ToolError(f"id must be a string like 'd1', got {draft_id!r}")
+        for d in self.drafts:
+            if d["id"] == draft_id.strip():
+                return dict(d)
+        raise ToolError(f"no draft with id {draft_id!r}; use list_drafts to see valid ids")
 
     # ---- calendar ----
     def list_events(self, date=None):
@@ -247,6 +283,7 @@ class World:
 
     def snapshot(self):
         state = {"emails": self.emails, "sent_emails": self.sent_emails,
+                 "drafts": self.drafts,
                  "events": self.events, "messages": self.messages,
                  "reminders": self.reminders, "actions": self.actions}
         with open(os.path.join(self.workdir, "state.json"), "w", encoding="utf-8") as f:

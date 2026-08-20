@@ -40,6 +40,7 @@ from harness import llm as llm_mod  # noqa: E402
 from harness import mcp_bridge  # noqa: E402
 from harness import mcp_config  # noqa: E402
 from harness import narrate  # noqa: E402
+from harness import mailbox  # noqa: E402
 from harness import profiles  # noqa: E402
 from harness.tuner import run_metrics  # noqa: E402
 from harness import tools as tools_mod  # noqa: E402
@@ -340,6 +341,15 @@ def main():
     # their rules in.
     agent_mod.EXTRA_RULES += chat.reply_rules()
     chat.enable_say()      # the tool those rules are about
+    # Sending is the end of it: no waiting for replies, and no fresh look at
+    # the inbox bought by having sent something.
+    agent_mod.WAIT_GUARD = True
+    agent_mod.EXTRA_RULES += agent_mod.WAIT_RULES
+    # The sent folder and a drafts folder. Enabled after --root and --mcp have
+    # had their say, so the union below keeps whatever they added.
+    mailbox.enable()
+    agent_mod.EXTRA_WRITE_TOOLS = (set(agent_mod.EXTRA_WRITE_TOOLS)
+                                   | mailbox.WRITE_TOOLS)
     agent_mod.MAX_CALLS = call_budget(profile,
                                       override=args.max_calls or cfg.get("max_calls"),
                                       extended=bool(root or names))

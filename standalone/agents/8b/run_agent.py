@@ -59,6 +59,7 @@ from harness import fs_tools  # noqa: E402
 from harness import mcp_bridge  # noqa: E402
 from harness import mcp_config  # noqa: E402
 from harness import calendars  # noqa: E402
+from harness import mailbox  # noqa: E402
 from harness import tools as tools_mod  # noqa: E402
 from harness import profiles  # noqa: E402
 from harness.tuner import run_metrics  # noqa: E402
@@ -280,6 +281,15 @@ def main():
     # I have on Thursday" cannot be answered from half the week. No-ops unless
     # there really is more than one calendar registered.
     merged_calendars = calendars.enable()
+    # Sending is the end of it: no waiting for replies, and no fresh look at
+    # the inbox bought by having sent something.
+    agent_mod.WAIT_GUARD = True
+    agent_mod.EXTRA_RULES += agent_mod.WAIT_RULES
+    # The sent folder and a drafts folder. Enabled after --root and --mcp have
+    # had their say, so the union below keeps whatever they added.
+    mailbox.enable()
+    agent_mod.EXTRA_WRITE_TOOLS = (set(agent_mod.EXTRA_WRITE_TOOLS)
+                                   | mailbox.WRITE_TOOLS)
     if calendars.MERGED in tools_mod.TOOLS:
         print(f"  calendars: {len(merged_calendars)} connected, "
               f"{calendars.MERGED} asks all of them")

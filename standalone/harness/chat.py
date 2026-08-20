@@ -178,8 +178,10 @@ HOW TO WRITE WHAT YOU SAY, in say and in the summary you pass to done:
 - If they asked a question, the first sentence IS the answer. Do not describe
   looking it up, recalling it, or checking it - just answer.
 - One or two plain sentences. No preamble, no sign-off.
-- If you already answered with say, the summary can be a few words: they have
-  read your message already."""
+- The summary IS your answer, unless you already gave it with say. Only then
+  may it be a few words, because they have read your message already.
+- Once a tool has given you what the question asked for, answer. Do not keep
+  looking for more."""
 
 
 SAY = {

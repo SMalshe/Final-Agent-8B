@@ -1827,3 +1827,30 @@ $('setup-done').onclick = () => {
   loadAgents(true);
 };
 checkSetup();
+
+/* --------------------------------------------------------------- new mail ---
+   The agent is told that waiting is not a step: nothing arrives while it is
+   working, so it must not sit and poll the inbox. That leaves someone needing
+   to notice when mail DOES turn up, and comparing two lists of ids is the
+   app's job, not the model's. Clicking clears the flag. */
+async function checkMail() {
+  if (!S.agent) return;
+  let data;
+  try { data = await api(`/api/mail?agent=${encodeURIComponent(S.agent)}`); }
+  catch { return; }
+  const pill = $('mailflag');
+  pill.hidden = !data.count;
+  if (!data.count) return;
+  const who = data.new.map((m) => String(m.from || '').split('@')[0]).filter(Boolean);
+  pill.textContent = data.count === 1
+    ? `1 new email${who[0] ? ` from ${who[0]}` : ''}`
+    : `${data.count} new emails${who.length ? ` from ${who.slice(0, 2).join(', ')}` : ''}`;
+  pill.title = data.new.map((m) => `${m.from}: ${m.subject}`).join('\n');
+}
+
+$('mailflag').onclick = async () => {
+  try { await post('/api/mail/seen', { agent: S.agent }); } catch {}
+  $('mailflag').hidden = true;
+};
+checkMail();
+setInterval(checkMail, 20000);

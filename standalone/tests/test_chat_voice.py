@@ -32,6 +32,14 @@ class TestVoice(unittest.TestCase):
         self.assertIn("Not every message needs a tool", text)
         self.assertIn("say", text)
 
+    def test_the_short_summary_licence_is_conditional(self):
+        """Observed: "Listed sent emails." came back from a run that never
+        called say. A clause permitting a few words reads as permission for a
+        few words, so the condition has to lead."""
+        text = chat.reply_rules()
+        self.assertIn("The summary IS your answer", text)
+        self.assertIn("Only then", text)
+
     def test_it_asks_for_second_person_and_an_answer_first(self):
         text = chat.reply_rules()
         self.assertIn('"you"', text)

@@ -397,6 +397,34 @@ EXTRA_WRITE_TOOLS = set()
 # keeps every tool exactly as before.
 ROUTE_TOOLS = False
 
+# Sending mail cannot put mail in your inbox, so a send must not hand inbox
+# reads a fresh repeat budget. Without this the loop below reads "the world
+# changed, that call may return something new" and licenses exactly the poll it
+# exists to stop: observed live, an 8B sent a meeting request and then checked
+# the inbox six times for a reply that cannot arrive while it is working.
+# Off for the benchmark, like every other switch here.
+WAIT_GUARD = False
+
+# Writes whose effect is entirely outbound: they change what YOU have sent, not
+# what you have been sent.
+OUTBOUND_ONLY = {"send_email", "send_message", "save_draft", "say"}
+
+# Reads that answer "what has arrived", which is the thing an agent cannot make
+# happen by acting.
+INBOX_READS = {"list_emails", "read_email"}
+
+# Appended by the runners that turn WAIT_GUARD on. The guard stops the polling;
+# this explains why, so the model spends its next call on the task rather than
+# on a workaround for a rule it does not understand.
+WAIT_RULES = """
+
+WAITING IS NOT A STEP:
+Nothing new arrives while you are working. Sending a message is the end of your
+part: a reply cannot appear in the inbox during this run, so checking for one
+will always find the same inbox you already saw. Send it, say that it has gone,
+and finish. If the person needs to know when a reply comes, tell them you will
+not see it - you are not watching the inbox between runs."""
+
 PLAN_PROMPT = ('Which tools will you need to call to complete this task, in order? '
                'Reply with one JSON object: {"steps": [{"tool": "<tool_name>", "what": "<5 words>"}, ...]}. '
                'Most tasks need only 1-4 calls. Do not include tools the task does not need.')
@@ -494,7 +522,10 @@ def run_harness(llm, world, mem, task_text, history=""):
     messages.append({"role": "user", "content": act})
 
     verify_rounds = 0
-    seen_calls = {}      # signature -> (world_version at last exec, times run there)
+    seen_calls = {}      # signature -> (version at last exec, times run there)
+    inbox_version = 0    # moves only on writes that could change what arrived
+    sent_outbound = False  # something has gone out; a reply cannot arrive in this run
+    inbox_looks = 0        # looks taken since it went
     world_version = 0    # bumped on successful writes; a call's repeat budget is
                          # only spent while the world is unchanged, and resets
                          # the moment anything writes
@@ -715,12 +746,34 @@ def run_harness(llm, world, mem, task_text, history=""):
                     reply)
                 continue
 
+            # Polling for a reply. The repeat budget cannot catch this on its
+            # own: the observed loop was list_emails, then read_email, then
+            # read_email again with a different id - three different signatures,
+            # so three fresh budgets, and six calls spent watching an inbox that
+            # cannot change. Once something has been sent, one more look is
+            # fair; the ones after it are waiting, and waiting is not a step.
+            if WAIT_GUARD and sent_outbound and name in INBOX_READS:
+                inbox_looks += 1
+                if inbox_looks > 1:
+                    give_feedback(
+                        f"You already looked after sending. Nothing new arrives while you "
+                        f"are working - a reply cannot appear during this run, so looking "
+                        f"again finds the same inbox. Tell the person it has gone and call "
+                        f"done. The task is: \"{task_text}\"", reply)
+                    continue
+
             sig = json.dumps({"t": name, "a": args}, sort_keys=True, default=str)
             # A call may repeat up to its budget while the world is unchanged; any
             # successful write moves world_version and hands out a fresh budget,
             # because the same call can now legitimately return something new.
             last_version, repeats, last_ok = seen_calls.get(sig, (None, 0, True))
-            if last_version != world_version:
+            # Which version this call's budget is measured against. An inbox
+            # read is measured against a version that only outbound writes do
+            # NOT move, so sending something cannot buy another look for a
+            # reply to it.
+            against = (inbox_version if (WAIT_GUARD and name in INBOX_READS)
+                       else world_version)
+            if last_version != against:
                 repeats = 0
             limit = PROFILE.repeat_limit_write if name in write_tools else PROFILE.repeat_limit
             if not last_ok:
@@ -744,6 +797,11 @@ def run_harness(llm, world, mem, task_text, history=""):
                     fb = (f"{name} with exactly those arguments already failed, and nothing has "
                           f"changed since, so it will fail the same way. Its error is above - fix "
                           f"the arguments or use a different tool. The task is: \"{task_text}\"")
+                elif WAIT_GUARD and name in INBOX_READS:
+                    fb = (f"You have already looked at the inbox, and nothing arrives while "
+                          f"you are working - a reply cannot appear during this run, so "
+                          f"looking again finds the same thing. Do the NEXT step of the "
+                          f"task: \"{task_text}\" If everything is complete, call done.")
                 elif limit == 1:
                     # byte-identical to the phrasing the benchmark runs on
                     fb = (f"You already called {name} with exactly those arguments; its result is above "
@@ -771,9 +829,19 @@ def run_harness(llm, world, mem, task_text, history=""):
                 opened_files.add(str(args.get("filename", "")))
             if ok and name in write_tools:
                 world_version += 1
+                if name not in OUTBOUND_ONLY:
+                    inbox_version += 1
+                elif name != "say":
+                    sent_outbound, inbox_looks = True, 0
             # recorded against the world version AFTER any bump, so an identical
             # write stacked on its own result still counts as a repeat
-            seen_calls[sig] = (world_version, repeats + 1, ok)
+            # Recomputed, not reused: `against` was read BEFORE the bump above,
+            # and this line deliberately records the version AFTER it, so an
+            # identical write stacked on its own result still counts as a
+            # repeat. Reusing the earlier value handed every write a fresh
+            # budget - caught by three existing loop tests.
+            seen_calls[sig] = ((inbox_version if (WAIT_GUARD and name in INBOX_READS)
+                                else world_version), repeats + 1, ok)
             if not ok:
                 ep.tool_errors += 1
             obs = _obs(obs)

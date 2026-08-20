@@ -50,6 +50,7 @@ sys.path.insert(0, PROJECT)
 from harness import chat  # noqa: E402
 from harness import mcp_config  # noqa: E402
 from harness import profiles  # noqa: E402
+from webui import mailflag  # noqa: E402
 from webui import preflight  # noqa: E402
 
 # Rough per-size guidance for the picker; the machine, not the harness, decides.
@@ -725,6 +726,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     {"name": name, "summary": summary,
                      "setup": mcp_config.setup_notes(name)}
                     for name, summary in mcp_config.available()])
+            if path == "/api/mail":
+                # Who tells you when mail arrives, now that the agent is told
+                # not to sit and watch for it.
+                return self.send_json(mailflag.check(agent_dir(q.get("agent", ""))))
             if path == "/api/setup":
                 # What a first run needs before it can work, plus any download
                 # in flight. Polled by the setup screen.
@@ -779,6 +784,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                            "mcp_mode": body.get("mcp_mode") or None}
                 run = RUNS.start(agent, task, options)
                 return self.send_json({"run": run.id, "agent": agent})
+            if path == "/api/mail/seen":
+                return self.send_json(mailflag.mark_seen(agent_dir(body.get("agent", ""))))
             if path == "/api/setup/fix":
                 # Only the named, safe actions in preflight.FIXES: install this
                 # interpreter's packages, start Ollama, pull a model. Installing
