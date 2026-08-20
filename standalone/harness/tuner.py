@@ -68,12 +68,29 @@ BOUNDS = {
     "memory_k": (1, 6),
 }
 
+# The keys signature() and score() actually read. A log missing any of them is
+# skipped rather than defaulted - the same "a missing counter is not a zero"
+# rule that skips pre-tuner logs, and it keeps one half-written log (a crash
+# mid-write, an older schema) from taking the whole loop down with a KeyError.
+REQUIRED_METRICS = ("calls", "budget", "parse_failures", "invalid_calls")
+
 MIN_RUNS = 6        # runs needed before any proposal is trusted
 MIN_JUDGE = 5       # runs needed AFTER a change before it is judged
 WINDOW = 20         # most recent runs per model that count as "now"
 TOLERANCE = 0.02    # score drop tolerated before a change is reverted
 
 Proposal = namedtuple("Proposal", "knob old new operator why evidence")
+
+
+def _index(name):
+    """The run number out of "run_007.json".
+
+    Ordering and "runs since the change" both depend on this. Comparing the
+    filenames directly works only while they are the same length: run_1000
+    sorts BEFORE run_999, which would quietly freeze the loop after 999 runs.
+    """
+    digits = "".join(c for c in os.path.basename(name or "") if c.isdigit())
+    return int(digits) if digits else 0
 
 
 # ------------------------------------------------------------------ record ---
@@ -127,14 +144,15 @@ def load_runs(log_dir, model=None):
     rather than guessed at: a missing counter is not a zero.
     """
     runs = []
-    for path in sorted(glob.glob(os.path.join(log_dir, "run_*.json"))):
+    for path in sorted(glob.glob(os.path.join(log_dir, "run_*.json")), key=_index):
         try:
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
         except (ValueError, OSError):
             continue
         metrics = data.get("metrics")
-        if not isinstance(metrics, dict) or "calls" not in metrics:
+        if not isinstance(metrics, dict) or any(k not in metrics
+                                                for k in REQUIRED_METRICS):
             continue
         if model and data.get("model") and data["model"] != model:
             continue
@@ -188,7 +206,12 @@ def score(runs):
 # ----------------------------------------------------------------- propose ---
 
 def _step(knob, current, delta):
-    """A bounded step, or None if the knob is already at the wall."""
+    """A bounded step, or None if the knob is already at the wall.
+
+    None, never 0: a step DOWN TO zero is a legitimate proposal (dropping the
+    verifier is what the 1B profile does on purpose), so callers must test
+    `is None` rather than truthiness or that proposal disappears silently.
+    """
     low, high = BOUNDS[knob]
     new = min(high, max(low, current + delta))
     return None if new == current else new
@@ -198,7 +221,9 @@ def _op_budget(sig, knobs):
     if sig["exhaustion"] < 0.34:
         return None
     new = _step("max_calls", knobs["max_calls"], +6)
-    return new and Proposal(
+    if new is None:
+        return None
+    return Proposal(
         "max_calls", knobs["max_calls"], new, "budget_exhaustion",
         "runs are hitting the call ceiling with the task unfinished, so the "
         "budget is cutting off work rather than braking a loop",
@@ -209,7 +234,9 @@ def _op_json(sig, knobs):
     if sig["parse_per_call"] < 0.15:
         return None
     new = _step("num_predict", knobs["num_predict"], -100)
-    return new and Proposal(
+    if new is None:
+        return None
+    return Proposal(
         "num_predict", knobs["num_predict"], new, "json_fragility",
         "long replies are where small-model JSON breaks; a shorter cap keeps "
         "the object closed",
@@ -220,7 +247,9 @@ def _op_verify(sig, knobs):
     if sig["wasted_verify"] < 0.34:
         return None
     new = _step("verify_rounds", knobs["verify_rounds"], -1)
-    return new and Proposal(
+    if new is None:
+        return None
+    return Proposal(
         "verify_rounds", knobs["verify_rounds"], new, "wasted_verification",
         "the verifier is rejecting done and nothing happens afterwards, which "
         "is the false-negative failure, not a caught gap",
@@ -231,7 +260,9 @@ def _op_plan(sig, knobs):
     if sig["invalid_per_call"] < 0.2 or not knobs.get("plan", True):
         return None
     new = _step("plan_max_steps", knobs["plan_max_steps"], +1)
-    return new and Proposal(
+    if new is None:
+        return None
+    return Proposal(
         "plan_max_steps", knobs["plan_max_steps"], new, "invalid_calls",
         "calls are being rejected before execution; a longer tool-grounded "
         "plan puts more of the right tool names in front of the model",
@@ -300,7 +331,7 @@ class Ledger:
         """
         for e in reversed(self.entries):
             if e.get("model") == model:
-                return e.get("after_run") or ""
+                return e.get("evidence_from") or e.get("after_run") or ""
         return ""
 
     def outstanding(self, model):
@@ -309,10 +340,21 @@ class Ledger:
                 return e
         return None
 
-    def settle(self, entry, status, after_score):
+    def settle(self, entry, status, after_score, evidence_from=None):
+        """Close out a change.
+
+        `evidence_from` restarts the evidence window, and a REVERT passes it:
+        the runs recorded under the knob that just came back out describe a
+        configuration that no longer exists, so letting them drive the next
+        proposal is the same stale-window mistake in a different place. A
+        change that is KEPT passes nothing - its runs still describe the
+        config that is live.
+        """
         entry["status"] = status
         entry["after_score"] = after_score
         entry["settled"] = time.strftime("%Y-%m-%d %H:%M")
+        if evidence_from:
+            entry["evidence_from"] = evidence_from
         self._rewrite()
 
     def retired(self, model):
@@ -368,28 +410,30 @@ def tune(agent_dir, apply=False):
     #    change is ever in flight and the score difference is attributable.
     entry = ledger.outstanding(model)
     if entry:
-        after = [r for r in runs if r["name"] > entry["after_run"]]
+        after = [r for r in runs if _index(r["name"]) > _index(entry["after_run"])]
+        report["signature"] = signature(after)
         if len(after) < MIN_JUDGE:
             report["judged"] = {"verdict": "pending",
                                 "have": len(after), "need": MIN_JUDGE}
             return report
         now = score(after)
         regressed = now is not None and now < entry["baseline"] - TOLERANCE
-        if regressed and apply:
-            write_knob(config_path, entry["knob"], entry["old"])
-            ledger.settle(entry, "reverted", now)
-            model, knobs = effective_knobs(config_path)
-        elif not regressed and apply:
-            ledger.settle(entry, "kept", now)
         report["judged"] = {"verdict": "revert" if regressed else "keep",
                             "knob": entry["knob"], "baseline": entry["baseline"],
                             "after": now, "operator": entry["operator"]}
+        if not apply:
+            return report            # judging is a write; without --apply, just say so
         if regressed:
-            return report   # one move per invocation; re-measure before stepping again
+            write_knob(config_path, entry["knob"], entry["old"])
+            ledger.settle(entry, "reverted", now, evidence_from=runs[-1]["name"])
+            return report            # one move per invocation; re-measure before stepping
+        ledger.settle(entry, "kept", now)
 
-    # 2. Propose from runs recorded since the last change only.
+    # 2. Propose from runs recorded since the last change only. Evidence resets
+    #    at every change, or an operator keeps firing on failures its own fix
+    #    already addressed and walks the knob to its bound.
     since = ledger.last_change_run(model)
-    window = [r for r in runs if r["name"] > since][-WINDOW:]
+    window = [r for r in runs if _index(r["name"]) > _index(since)][-WINDOW:]
     report["signature"] = signature(window)
     prop = propose(signature(window), knobs, retired=ledger.retired(model))
     if not prop:
@@ -440,7 +484,11 @@ def main():
     ap.add_argument("--agent", default=".", help="agent folder (holds config.json and logs/)")
     ap.add_argument("--apply", action="store_true", help="write the change, not just report it")
     args = ap.parse_args()
-    print(format_report(tune(os.path.abspath(args.agent), apply=args.apply)))
+    agent_dir = os.path.abspath(args.agent)
+    if not os.path.exists(os.path.join(agent_dir, "config.json")):
+        raise SystemExit(f"no config.json in {agent_dir} "
+                         f"- point --agent at an agent folder")
+    print(format_report(tune(agent_dir, apply=args.apply)))
 
 
 if __name__ == "__main__":

@@ -58,6 +58,18 @@ class TestMining(unittest.TestCase):
             runs = tuner.load_runs(tmp)
             self.assertEqual([r["name"] for r in runs], ["run_002.json"])
 
+    def test_a_half_written_metrics_block_is_skipped_not_crashed_on(self):
+        """Regression: load_runs only checked for "calls", so a crashed write
+        got admitted and signature() then died on the first missing counter."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "run_001.json"), "w") as f:
+                json.dump({"task": "t", "model": MODEL, "finished": True,
+                           "transcript": [], "metrics": {"calls": 9}}, f)
+            write_run(tmp, 2)
+            runs = tuner.load_runs(tmp, model=MODEL)
+            self.assertEqual([r["name"] for r in runs], ["run_002.json"])
+            tuner.signature(runs)     # must not raise
+
     def test_other_models_are_not_pooled(self):
         with tempfile.TemporaryDirectory() as tmp:
             write_run(tmp, 1)
@@ -75,6 +87,18 @@ class TestMining(unittest.TestCase):
                   {"kind": "done", "content": "ok"}]
         self.assertEqual(tuner._verify_signals(productive), (1, 0))
         self.assertEqual(tuner._verify_signals(barren), (1, 1))
+
+    def test_runs_are_ordered_numerically_not_lexicographically(self):
+        """Regression: filename comparison puts run_1000 BEFORE run_999, which
+        would freeze "runs since the change" once an agent passed 999 runs."""
+        self.assertGreater(tuner._index("run_1000.json"), tuner._index("run_999.json"))
+        self.assertEqual(tuner._index(""), 0)
+        with tempfile.TemporaryDirectory() as tmp:
+            for n in (998, 999, 1000, 1001):
+                write_run(tmp, n)
+            self.assertEqual([r["name"] for r in tuner.load_runs(tmp)],
+                             ["run_998.json", "run_999.json",
+                              "run_1000.json", "run_1001.json"])
 
     def test_score_prefers_completion_then_efficiency(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -128,6 +152,15 @@ class TestProposals(unittest.TestCase):
     def test_a_knob_at_its_bound_does_not_step(self):
         knobs = dict(self.knobs, max_calls=tuner.BOUNDS["max_calls"][1])
         self.assertIsNone(tuner.propose(self._sig(exhaustion=1.0), knobs))
+
+    def test_a_step_down_to_zero_is_still_a_proposal(self):
+        """Regression: the operators returned `new and Proposal(...)`, so a step
+        to 0 - dropping the verifier, which is what the 1B profile does on
+        purpose - evaluated falsy and vanished silently."""
+        knobs = dict(self.knobs, verify_rounds=1)
+        p = tuner.propose(self._sig(wasted_verify=0.9), knobs)
+        self.assertIsNotNone(p)
+        self.assertEqual((p.knob, p.old, p.new), ("verify_rounds", 1, 0))
 
     def test_a_retired_operator_is_not_reproposed(self):
         sig = self._sig(exhaustion=0.5)
@@ -240,6 +273,26 @@ class TestLoop(unittest.TestCase):
             self.assertEqual(ledger.retired(MODEL), {"budget_exhaustion"})
             # and it is not proposed again
             self.assertIsNone(tuner.tune(tmp, apply=True)["proposal"])
+
+    def test_a_revert_restarts_the_evidence_window(self):
+        """Regression: after a revert the boundary stayed where the change was
+        applied, so runs recorded under the knob that had just been taken back
+        out still counted as evidence for the restored config."""
+        with tempfile.TemporaryDirectory() as tmp:
+            make_agent(tmp)
+            logs = os.path.join(tmp, "logs")
+            for i in range(1, 5):
+                write_run(logs, i, finished=True, calls=8, budget=20)
+            for i in range(5, 9):
+                write_run(logs, i, finished=False, calls=20, budget=20)
+            tuner.tune(tmp, apply=True)
+            for i in range(9, 15):
+                write_run(logs, i, finished=False, calls=26, budget=26)
+            self.assertEqual(tuner.tune(tmp, apply=True)["judged"]["verdict"], "revert")
+            ledger = tuner.Ledger(os.path.join(tmp, "tuning.jsonl"))
+            self.assertEqual(ledger.last_change_run(MODEL), "run_014.json")
+            # nothing recorded under the reverted knob is evidence any more
+            self.assertEqual(tuner.tune(tmp)["signature"]["runs"], 0)
 
 
 if __name__ == "__main__":
