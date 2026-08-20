@@ -25,7 +25,8 @@ simulated office. Reads are real; sends are not — see --mcp-live.
     run.ps1 --mcp-help                  <- what each server needs before it works
 
 Flags:
-    --root PATH     working root; every path the agent touches must be inside it
+    --root PATH     working root; every path the agent touches must be inside it.
+                    Repeat it for several folders: --root work --root personal
     --shell         also allow run_command (PowerShell), still confirmed
     --yolo          skip confirmation prompts for overwrite/delete/move/shell
     --max-calls N   LLM call budget (default 20 simulated, 40 with --root/--mcp)
@@ -36,6 +37,8 @@ Flags:
     --mcp-read-only drop every world-changing MCP tool
     --mcp-list      start the named servers, print the tools they expose, exit
     --mcp-help      print setup steps for every known server, exit
+    --route-tools   show only the tools the task needs; the model asks for more
+                    with request_tools (harness/toolrouter.py)
 
 State persists between runs:
     workspace/state.json   inbox, calendar, sent mail, messages, reminders
@@ -55,6 +58,8 @@ from harness import agent as agent_mod  # noqa: E402
 from harness import fs_tools  # noqa: E402
 from harness import mcp_bridge  # noqa: E402
 from harness import mcp_config  # noqa: E402
+from harness import calendars  # noqa: E402
+from harness import tools as tools_mod  # noqa: E402
 from harness import profiles  # noqa: E402
 from harness.tuner import run_metrics  # noqa: E402
 from harness.agent import run_harness  # noqa: E402
@@ -65,8 +70,7 @@ from harness.world import World  # noqa: E402
 
 REAL_RULES = """
 
-You also have tools that act on the REAL computer, inside the working root
-{root}. Paths are relative to that root.
+You also have tools that act on the REAL computer, inside {root}
 - Look before you write: call list_dir or read_file first, so you change the
   file that actually exists instead of one you assumed.
 - Never delete or overwrite anything the task did not ask you to change.
@@ -75,8 +79,9 @@ You also have tools that act on the REAL computer, inside the working root
 
 
 def parse_flags(argv):
-    opts = {"root": None, "shell": False, "yolo": False, "max_calls": None,
+    opts = {"root": [], "shell": False, "yolo": False, "max_calls": None,
             "tiers": False, "small": None, "deep": None, "office": False,
+            "route_tools": False,
             "mcp": [], "mcp_mode": None, "mcp_list": False, "mcp_help": False}
     rest = []
     i = 0
@@ -98,7 +103,9 @@ def parse_flags(argv):
             opts["mcp_help"] = True
             i += 1
         elif a == "--root" and i + 1 < len(argv):
-            opts["root"] = argv[i + 1]
+            # Repeatable: --root work --root personal. Each stays its own
+            # sandbox; the model addresses them by folder name.
+            opts["root"].append(argv[i + 1])
             i += 2
         elif a == "--shell":
             opts["shell"] = True
@@ -122,6 +129,9 @@ def parse_flags(argv):
             i += 2
         elif a == "--with-office":
             opts["office"] = True
+            i += 1
+        elif a == "--route-tools":
+            opts["route_tools"] = True
             i += 1
         else:
             rest.append(a)
@@ -202,7 +212,9 @@ def main():
     cfg["num_ctx"] = cfg.get("num_ctx") or profile.num_ctx
 
     opts, task = parse_flags(sys.argv[1:])
-    root = opts["root"] or cfg.get("root")
+    root = opts["root"] or cfg.get("root") or []
+    if isinstance(root, str):
+        root = [root]
 
     if opts["mcp_help"]:
         for name, _ in mcp_config.available():
@@ -234,7 +246,14 @@ def main():
                                confirm=None if opts["yolo"] else confirm)
         if not opts["office"]:
             fs_tools.restrict_to_files()  # a real-folder agent shouldn't fiddle with a fake inbox
-        agent_mod.EXTRA_RULES = REAL_RULES.format(root=root)
+        if isinstance(root, list):
+            where = ("these working folders. Address a file by the folder name "
+                     "it is in, like \"work/report.xlsx\":\n"
+                     + "\n".join(f"  {label}/  = {path}"
+                                for label, path in fs_tools._LABELS.items()))
+        else:
+            where = f"the working root\n{root}. Paths are relative to that root."
+        agent_mod.EXTRA_RULES = REAL_RULES.format(root=where)
         agent_mod.EXTRA_WRITE_TOOLS = fs_tools.WRITE_TOOLS
         # a real-file agent should reason about the real date, not the fixed
         # benchmark clock
@@ -257,6 +276,15 @@ def main():
         today = datetime.date.today()
         agent_mod.SIM_TODAY = today
         agent_mod.SIM_TODAY_HUMAN = today.strftime("%A, %B %d, %Y")
+    # Two calendars connected at once get one tool that asks both, so "what do
+    # I have on Thursday" cannot be answered from half the week. No-ops unless
+    # there really is more than one calendar registered.
+    merged_calendars = calendars.enable()
+    if calendars.MERGED in tools_mod.TOOLS:
+        print(f"  calendars: {len(merged_calendars)} connected, "
+              f"{calendars.MERGED} asks all of them")
+
+    agent_mod.ROUTE_TOOLS = opts["route_tools"] or bool(cfg.get("route_tools"))
     agent_mod.MAX_CALLS = (opts["max_calls"] or cfg.get("max_calls")
                            or (40 if (root or names) else profile.max_calls))
 
@@ -280,7 +308,8 @@ def main():
     if root:
         mode = "read/write" + (" + shell" if opts["shell"] or cfg.get("allow_shell") else "")
         toolset = "files + office world" if opts["office"] else "files only (office tools dropped)"
-        print(f"  real files: {mode} inside {root}"
+        shown = ", ".join(root) if isinstance(root, list) else root
+        print(f"  real files: {mode} inside {shown}"
               + ("   [--yolo: confirmations off]" if opts["yolo"] else ""))
         print(f"  toolset: {toolset}")
     if mcp_summary:

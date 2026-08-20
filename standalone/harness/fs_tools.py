@@ -36,7 +36,11 @@ def _eg(*parts):
     return os.path.join(*parts)
 
 
-_ROOT = None
+_ROOT = None      # primary root: where a new relative path lands, and the shell cwd
+_ROOTS = []       # every root, primary first
+_LABELS = {}      # label -> root. With more than one root the model sees and
+                  # writes paths as "<label>/rest", so "which folder" is part of
+                  # the path rather than something it has to remember.
 _ALLOW_SHELL = False
 _CONFIRM = None          # callable(action:str, detail:str) -> bool
 
@@ -80,15 +84,53 @@ def _within(path, root):
     return path == root or path.startswith(root.rstrip("\\/") + os.sep)
 
 
+def _root_of(path):
+    """The root that contains path, or None."""
+    return next((r for r in _ROOTS if _within(path, r)), None)
+
+
+def _label_of(root):
+    return next((l for l, r in _LABELS.items() if _norm(r) == _norm(root)), "")
+
+
+def _label_for(root, taken):
+    base = (os.path.basename(root.rstrip("\\/"))
+            or root.strip("\\/").replace(":", "") or "root")
+    label, n = base, 2
+    while label in taken:
+        label, n = f"{base}{n}", n + 1
+    return label
+
+
+def _roots_listing():
+    return "\n".join(f"{l}/  ({r})" for l, r in _LABELS.items())
+
+
 def _resolve(rel, write=False):
     """Resolve a model-supplied path against the root and enforce the scope."""
     if not isinstance(rel, str) or not rel.strip():
         raise ToolError(f'path is required, e.g. "{_eg("notes", "todo.txt")}"')
     raw = os.path.expandvars(os.path.expanduser(rel.strip().strip('"')))
-    # os.path.join returns raw unchanged when raw is already absolute
-    path = os.path.abspath(os.path.join(_ROOT, raw))
-    if not _within(path, _ROOT):
-        raise ToolError(f"path is outside the allowed root {_ROOT}; stay inside it")
+    if os.path.isabs(raw):
+        path = os.path.abspath(raw)
+        root = _root_of(path)
+    else:
+        head, _, rest = raw.replace("\\", "/").partition("/")
+        if len(_ROOTS) > 1 and head in _LABELS:
+            # "work/notes/todo.txt" - the model named the root itself
+            root = _LABELS[head]
+            path = os.path.abspath(os.path.join(root, rest))
+        else:
+            # A bare relative path: prefer the root where it already exists, so
+            # "report.xlsx" finds the one that is actually there. Falling back
+            # to the primary root is what makes a NEW file land somewhere
+            # predictable.
+            tries = [(r, os.path.abspath(os.path.join(r, raw))) for r in _ROOTS]
+            root, path = next((t for t in tries if os.path.exists(t[1])), tries[0])
+    if root is None or not _within(path, root):
+        where = (f"the allowed roots:\n{_roots_listing()}" if len(_ROOTS) > 1
+                 else f"the allowed root {_ROOT}")
+        raise ToolError(f"path is outside {where}; stay inside")
     if write:
         for denied in _DENY_WRITE:
             if _within(path, denied):
@@ -105,6 +147,14 @@ def _ask(action, detail):
 
 
 def _rel(path):
+    """How a path is shown to the model. With several roots it carries its
+    label, so what comes back is what can be passed straight back in."""
+    if len(_ROOTS) > 1:
+        root = _root_of(path)
+        if root:
+            rel = os.path.relpath(path, root)
+            label = _label_of(root)
+            return label + "/" if rel == "." else f"{label}/{rel}"
     try:
         return os.path.relpath(path, _ROOT)
     except ValueError:
@@ -121,6 +171,11 @@ def _clip(text, limit=MAX_OUTPUT_CHARS):
 # ------------------------------------------------------------------ tools ---
 
 def _list_dir(a):
+    asked = str(a.get("path", ".") or ".").strip()
+    if len(_ROOTS) > 1 and asked in (".", "", "/", "\\"):
+        # There is no single "here" with several roots, so listing nothing in
+        # particular lists the roots.
+        return "working folders:\n" + _roots_listing()
     path = _resolve(a.get("path", "."))
     if not os.path.isdir(path):
         raise ToolError(f"{_rel(path)} is not a directory")
@@ -354,17 +409,33 @@ def restrict_to_files():
 def enable(root, allow_shell=False, confirm=None, shell_only=False, deny=None):
     """Inject the real-filesystem tools into the shared registry, scoped to root.
 
+    `root` may be one path or several. With several, each gets a label from its
+    folder name and the model addresses files as "<label>/rest" - the roots stay
+    separate sandboxes, they are not merged into one tree.
+
     `deny` adds locations that stay read-only even inside the root, on top of
     the platform defaults.
 
     Call once at process start, before run_harness(). The benchmark never calls
     this, so bench/ keeps the original 14-tool registry.
     """
-    global _ROOT, _ALLOW_SHELL, _CONFIRM, _DENY_WRITE
-    root = os.path.abspath(os.path.expandvars(os.path.expanduser(str(root))))
-    if not os.path.isdir(root):
-        raise ToolError(f"working root {root} does not exist")
-    _ROOT, _ALLOW_SHELL, _CONFIRM = root, allow_shell, confirm
+    global _ROOT, _ROOTS, _LABELS, _ALLOW_SHELL, _CONFIRM, _DENY_WRITE
+    given = root if isinstance(root, (list, tuple, set)) else [root]
+    roots = []
+    for r in given:
+        r = os.path.abspath(os.path.expandvars(os.path.expanduser(str(r))))
+        if not os.path.isdir(r):
+            raise ToolError(f"working root {r} does not exist")
+        if not any(_norm(r) == _norm(x) for x in roots):
+            roots.append(r)
+    if not roots:
+        raise ToolError("at least one working root is required")
+    _ROOTS = roots
+    _ROOT = roots[0]
+    _LABELS = {}
+    for r in roots:
+        _LABELS[_label_for(r, _LABELS)] = r
+    _ALLOW_SHELL, _CONFIRM = allow_shell, confirm
     _DENY_WRITE = _default_deny() + [os.path.abspath(os.path.expanduser(d))
                                      for d in (deny or [])]
     for name, spec in _FS_TOOLS.items():
@@ -374,4 +445,4 @@ def enable(root, allow_shell=False, confirm=None, shell_only=False, deny=None):
             TOOLS[name] = spec
         else:
             TOOLS.pop(name, None)  # keep the registry matching the flags on re-enable
-    return root
+    return _ROOT if len(_ROOTS) == 1 else list(_ROOTS)

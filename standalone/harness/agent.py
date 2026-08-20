@@ -30,6 +30,7 @@ import json
 import re
 
 from .profiles import DEFAULT as _DEFAULT_PROFILE
+from . import toolrouter
 from .tools import TOOLS, execute, tool_docs, validate_call
 from .world import SIM_TODAY, SIM_TODAY_HUMAN
 
@@ -391,6 +392,11 @@ EXTRA_RULES = ""
 # benchmark; the on-device agents add the real-filesystem writers.
 EXTRA_WRITE_TOOLS = set()
 
+# Show the model only the tools a task looks like it needs (toolrouter.py),
+# instead of the whole registry. Off for the benchmark, so the graded prompt
+# keeps every tool exactly as before.
+ROUTE_TOOLS = False
+
 PLAN_PROMPT = ('Which tools will you need to call to complete this task, in order? '
                'Reply with one JSON object: {"steps": [{"tool": "<tool_name>", "what": "<5 words>"}, ...]}. '
                'Most tasks need only 1-4 calls. Do not include tools the task does not need.')
@@ -453,10 +459,23 @@ def run_harness(llm, world, mem, task_text, history=""):
                         "of date. If one describes the inbox, the calendar or a file, "
                         "check the real thing before you rely on it):\n"
                         + "\n".join(f"- {f}" for f in memories))
-    system = HARNESS_SYSTEM.format(today=SIM_TODAY_HUMAN, shape=SHAPE,
-                                   docs=tool_docs(with_examples=True),
-                                   memory_block=memory_block,
-                                   extra_rules=EXTRA_RULES + (history or ""))
+    # Routing narrows the docs, never the registry: every tool stays callable,
+    # so the plan, request_tools and a model that simply names a tool can all
+    # pull one back into view mid-run. build_system() re-renders the prompt when
+    # that happens, because docs the model cannot read are not available to it.
+    routing = ROUTE_TOOLS
+    if routing:
+        toolrouter.begin(task_text)
+
+    def build_system():
+        return HARNESS_SYSTEM.format(
+            today=SIM_TODAY_HUMAN, shape=SHAPE,
+            docs=tool_docs(with_examples=True,
+                           names=sorted(toolrouter.exposed()) if routing else None),
+            memory_block=memory_block,
+            extra_rules=EXTRA_RULES + (history or ""))
+
+    system = build_system()
     messages = [{"role": "system", "content": system}]
     ep.note("system", system)
     ep.note("task", task_text)
@@ -500,6 +519,9 @@ def run_harness(llm, world, mem, task_text, history=""):
     # plan never proposed looking at anything first, there is nothing to hold
     # the model to and the loop says nothing.
     planned = planned_tools(plan)
+    if routing and toolrouter.expose(planned):
+        messages[0]["content"] = build_system()
+        toolrouter.take_dirty()
     first_write_at = next((i for i, t in enumerate(planned) if t in write_tools), None)
     first_read_planned = None
     if first_write_at is not None:
@@ -592,6 +614,13 @@ def run_harness(llm, world, mem, task_text, history=""):
                 ep.note("repair", "; ".join(fixes))
             args = normalize_args(name, args)
 
+            # Name recovery: a real tool the model named but cannot see is
+            # exposed and run, not rejected. Naming it IS the request, and a
+            # round trip spent making it ask politely would be the scaffolding
+            # wasting the budget it exists to protect.
+            if routing and name in TOOLS and name not in toolrouter.exposed():
+                toolrouter.expose([name])
+                ep.note("repair", f"exposed {name}: named but not in view")
             problems = validate_call(name, args)
             # Writes only. The guard exists to stop a write landing on the wrong
             # day; a READ with a mismatched date is the model looking around,
@@ -644,6 +673,9 @@ def run_harness(llm, world, mem, task_text, history=""):
                     plan = plan_step(llm, messages, ep) or plan
                     messages.pop()
                     planned = planned_tools(plan)
+                    if routing and toolrouter.expose(planned):
+                        messages[0]["content"] = build_system()
+                        toolrouter.take_dirty()
                     planned_set = set(planned)
                 if name not in planned_set:
                     questioned_writes.add(name)
@@ -727,6 +759,8 @@ def run_harness(llm, world, mem, task_text, history=""):
             think_streak = think_streak + 1 if name == "think" else 0
 
             ok, obs = execute(name, args, world, mem)
+            if routing and toolrouter.take_dirty():
+                messages[0]["content"] = build_system()
             if ok and name not in write_tools and name != "think":
                 looked = True
                 # A filename the run was told about, from the result rather than
@@ -749,6 +783,8 @@ def run_harness(llm, world, mem, task_text, history=""):
             ep.note("observation", obs)
     finally:
         world.snapshot()
+    if routing:
+        toolrouter.end()
     return ep
 
 

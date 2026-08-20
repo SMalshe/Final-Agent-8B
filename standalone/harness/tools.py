@@ -161,10 +161,18 @@ TOOLS = {
 }
 
 
-def tool_docs(with_examples):
-    """Render the tool documentation block for a system prompt."""
+def tool_docs(with_examples, names=None):
+    """Render the tool documentation block for a system prompt.
+
+    `names` renders only those tools, in registry order, for the routed prompt
+    (harness/toolrouter.py). None means the whole registry, which is what the
+    benchmark and every unrouted run get.
+    """
     lines = []
+    wanted = None if names is None else set(names)
     for name, spec in TOOLS.items():
+        if wanted is not None and name not in wanted:
+            continue
         lines.append(f"- {name}: {spec['desc']}")
         for p, (tdesc, req) in spec["params"].items():
             lines.append(f"    {p} ({'required' if req else 'optional'}): {tdesc}")
