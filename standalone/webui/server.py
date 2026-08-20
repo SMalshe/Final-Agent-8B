@@ -633,6 +633,9 @@ class Runs:
                 reply = "(stopped)"
             else:
                 reply = "(the run ended without a summary)"
+            if end and end.get("simulated_mail"):
+                reply += ("\n\n(Practice mailbox - no real email was sent. "
+                          "Connect an account to send for real.)")
             chat.append(agent_dir(run.agent), tid, "assistant", reply, run=run.id)
         run.add({"t": "closed", "status": run.status, "code": code})
 

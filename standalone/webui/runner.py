@@ -41,6 +41,7 @@ from harness import mcp_bridge  # noqa: E402
 from harness import mcp_config  # noqa: E402
 from harness import narrate  # noqa: E402
 from harness import mailbox  # noqa: E402
+from harness import mailmode  # noqa: E402
 from harness import profiles  # noqa: E402
 from harness.tuner import run_metrics  # noqa: E402
 from harness import tools as tools_mod  # noqa: E402
@@ -317,13 +318,24 @@ def main():
         agent_mod.SIM_TODAY = today
         agent_mod.SIM_TODAY_HUMAN = today.strftime("%A, %B %d, %Y")
 
+    # Route tools per task rather than showing the whole registry. This is what
+    # makes an unfiltered Outlook affordable: sixty-nine tools registered, the
+    # handful a task needs in front of the model, and request_tools for a miss.
+    agent_mod.ROUTE_TOOLS = True
+
     mcp_cfg = cfg.get("mcp") or {}
     names = ([s.strip() for s in args.mcp.split(",") if s.strip()] if args.mcp
              else mcp_cfg.get("enable") or [])
+    # Mail should be real whenever it can be. A connected account is used
+    # without having to be asked for; the simulated inbox is a fallback, not a
+    # default.
+    if not names:
+        names = mailmode.connected()
     mcp_mode = args.mcp_mode or mcp_cfg.get("mode") or "draft"
     mcp_summary = None
     if names:
-        servers = mcp_config.names_to_servers(names, mcp_cfg, mode=mcp_mode)
+        servers = mcp_config.names_to_servers(names, mcp_cfg, mode=mcp_mode,
+                                              allow_all=True)
         mcp_summary = mcp_bridge.enable(servers, confirm=confirmer, mode=mcp_mode)
         if confirmer is not None:
             confirmer.real_servers = {x["id"] for x in mcp_summary}
@@ -347,6 +359,16 @@ def main():
     agent_mod.EXTRA_RULES += agent_mod.WAIT_RULES
     # The sent folder and a drafts folder. Enabled after --root and --mcp have
     # had their say, so the union below keeps whatever they added.
+    # Real mail drops the fixture inbox entirely - leaving both is how a model
+    # sends a real reply and then checks a fake inbox for the answer. Without a
+    # connected account the fixtures stay, but every result says it is a
+    # practice mailbox.
+    real_mail = mailmode.is_real(names)
+    if real_mail:
+        mailmode.drop_simulated(tools_mod.TOOLS)
+    else:
+        mailmode.mark_simulated(tools_mod.TOOLS)
+
     mailbox.enable()
     agent_mod.EXTRA_WRITE_TOOLS = (set(agent_mod.EXTRA_WRITE_TOOLS)
                                    | mailbox.WRITE_TOOLS)
@@ -413,6 +435,8 @@ def main():
         # invented is described by the same rule as a built-in one.
         line = (narrate.about(name, args_, done=True) if ok
                 else narrate.failed(name, args_, obs))
+        if line and not real_mail and name in mailmode.SIM_MAIL_TOOLS:
+            line += "  (simulated mailbox)"
         emit("tool", name=name, args=args_, ok=ok, result=obs, line=line)
         emit("world", **world_snapshot(world, mem, root))
 
@@ -445,7 +469,13 @@ def main():
                   f, indent=1, ensure_ascii=False)
 
     emit("world", **world_snapshot(world, mem, root))
+    # Did this run write mail into the practice office? The reply the person
+    # keeps has to carry that, or "Email sent to Dana." reads exactly like a
+    # real send in the one place they are most likely to believe it.
+    faked_mail = (not real_mail
+                  and any(a["tool"] == "send_email" and a["ok"] for a in world.actions))
     emit("end", finished=ep.finished, summary=ep.done_summary,
+         simulated_mail=faked_mail,
          unrequested=ep.unrequested or None,
          calls=llm.calls, budget=agent_mod.MAX_CALLS,
          output_tokens=llm.output_tokens, prompt_tokens=llm.prompt_tokens,

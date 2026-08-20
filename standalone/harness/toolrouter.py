@@ -68,6 +68,9 @@ SYNONYMS = {
     "remember": "memory save", "recall": "memory",
 }
 
+# Past this many tools, "show everything" stops being a safe fallback.
+ABSTAIN_CAP = 20
+
 _WORD = re.compile(r"[a-z0-9]+")
 _STOP = {"the", "a", "an", "to", "of", "and", "or", "for", "with", "my", "me",
          "i", "is", "are", "in", "on", "at", "it", "that", "this", "be", "do",
@@ -125,7 +128,15 @@ def select(task, names=None, limit=12):
               for n in names if n not in core]
     hits = sorted([(s, n) for s, n in scored if s > 0], reverse=True)
     if not hits:
-        return set(names)          # abstain: a bad guess is worse than no guess
+        # Abstain: a bad guess is worse than no guess, so show everything...
+        # unless everything is a real Outlook account, where "everything" is
+        # sixty-nine tools against an 8k context and showing them all is not
+        # caution, it is the failure this module exists to prevent. Past the
+        # cap, abstaining means admitting it: the core tools plus request_tools,
+        # and the model asks for what it needs by describing it.
+        if len(names) <= ABSTAIN_CAP:
+            return set(names)
+        return set(core)
     # Keep what is close to the best match, not merely better than nothing. One
     # tool scoring 7 next to one scoring 1 means the 1 is noise, and a flat
     # top-N would seat it anyway whenever the registry is small.

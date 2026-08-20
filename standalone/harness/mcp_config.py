@@ -106,7 +106,8 @@ def _merge(base, override):
     return out
 
 
-def names_to_servers(names, agent_cfg=None, mode=None, registry_path=None):
+def names_to_servers(names, agent_cfg=None, mode=None, registry_path=None,
+                     allow_all=False):
     """Resolve server names into configs ready for mcp_bridge.enable().
 
     names       list of registry keys, e.g. ["gmail", "ms365"]
@@ -125,6 +126,13 @@ def names_to_servers(names, agent_cfg=None, mode=None, registry_path=None):
             raise ConfigError(
                 f"unknown MCP server {name!r}. Known: {', '.join(sorted(reg))}")
         cfg = _merge(reg[name], overrides.get(name))
+        if allow_all:
+            # Register everything the server exposes and let the router decide
+            # what the model SEES (harness/toolrouter.py). The allow list was a
+            # standing guess at which ten of Outlook's sixty-nine tools matter;
+            # per task it can be a better guess, and request_tools covers a miss.
+            # `drop` and draft mode stay - those are safety, not curation.
+            cfg.pop("allow", None)
         cfg = {k: v for k, v in cfg.items() if k in _BRIDGE_KEYS}
         cfg["id"] = cfg.get("id", name)
         cfg["command"] = _resolve_command(_expand(cfg["command"]), name)
