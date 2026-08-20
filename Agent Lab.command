@@ -10,8 +10,8 @@ command -v "$PY" >/dev/null 2>&1 || {
 
 if ! "$PY" -c "import requests, pptx, openpyxl" >/dev/null 2>&1; then
   echo "Installing the agent's Python packages (one time)..."
-  "$PY" -m pip install --quiet requests python-pptx openpyxl || {
-    echo; echo "Install failed. Run:  $PY -m pip install requests python-pptx openpyxl"
+  "$PY" -m pip install --quiet -r ../requirements.txt || {
+    echo; echo "Install failed. Run:  $PY -m pip install -r requirements.txt"
     read -r; exit 1; }
 fi
 

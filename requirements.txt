@@ -1,0 +1,14 @@
+# Everything Agent Lab needs. Four packages, all pure-Python wheels.
+#     python3 -m pip install -r requirements.txt
+#
+# The model itself is NOT here: it is served by Ollama, which is a separate
+# install from https://ollama.com/download. The setup screen checks for it.
+requests
+python-pptx
+openpyxl
+
+# Optional, and the difference between a real app window and a browser tab.
+# It uses the OS webview (WebKit on macOS, WebView2 on Windows), so there is no
+# bundled Chromium and nothing to compile on arm64. Safe to remove if it will
+# not install on your platform - Agent Lab falls back to the browser.
+pywebview

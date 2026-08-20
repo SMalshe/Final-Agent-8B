@@ -1725,3 +1725,81 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   });
 }
+
+/* ------------------------------------------------------------------ setup ---
+   Shown only when something a run needs is missing. The checks come from
+   webui/preflight.py; every button here maps to one named action there, so the
+   page can install this interpreter's packages, start Ollama or pull a model,
+   and nothing else. Installing Ollama itself is a link the user clicks, since
+   a local web page should not put a system binary on their machine behind
+   their back. */
+const SETUP = { polling: null };
+
+function setupStep(c, i) {
+  const li = el('li', `setup-step ${c.state}`);
+  const mark = c.state === 'ok' ? '✓' : c.state === 'warn' ? '!' : String(i + 1);
+  li.append(el('span', 'setup-dot', mark));
+  const body = el('div', 'setup-body');
+  body.append(el('div', 'setup-name', c.title));
+  body.append(el('div', 'setup-detail', c.detail));
+  li.append(body);
+  if (c.fix === 'open_url' && c.url) {
+    const a = el('a', 'ghost small', c.fix_label);
+    a.href = c.url; a.target = '_blank'; a.rel = 'noreferrer';
+    li.append(a);
+  } else if (c.fix) {
+    const b = el('button', 'ghost small', c.fix_label);
+    b.type = 'button';
+    b.onclick = async () => {
+      b.disabled = true; b.textContent = 'Working…';
+      try {
+        await post('/api/setup/fix', { action: c.fix, tag: c.tag || '' });
+      } catch (e) {
+        b.textContent = 'Failed'; b.title = e.message; return;
+      }
+      // Starting Ollama and pip both take a moment to become true.
+      setTimeout(checkSetup, c.fix === 'pull_model' ? 400 : 2500);
+    };
+    li.append(b);
+  }
+  return li;
+}
+
+async function checkSetup(force) {
+  let data;
+  try {
+    data = await api('/api/setup');
+  } catch { return; }            // server not up yet; the next poll will do
+  const pane = $('setup');
+  if (data.ready && !force && pane.hidden) return;   // installed machine: never shown
+  $('setup-steps').replaceChildren(...data.checks.map(setupStep));
+
+  const pull = data.pull || {};
+  const pulling = pull.tag && !pull.done;
+  $('setup-pull').hidden = !(pulling || pull.error);
+  if (pulling) {
+    $('setup-bar-fill').style.width = `${pull.percent || 0}%`;
+    $('setup-pull-text').textContent =
+      `${pull.status || 'downloading'} ${pull.percent ? pull.percent + '%' : ''}`;
+  } else if (pull.error) {
+    $('setup-pull-text').textContent = `Download failed: ${pull.error}`;
+  }
+
+  $('setup-done').disabled = !data.ready;
+  if (data.ready && !pulling) $('setup-done').textContent = 'Start using it';
+  pane.hidden = data.ready && !pane.dataset.sticky;
+
+  // Poll only while something is in flight, so an idle app is not hitting the
+  // server every second forever.
+  const busy = pulling || (!data.ready && !pane.hidden);
+  if (busy && !SETUP.polling) SETUP.polling = setInterval(checkSetup, 1500);
+  if (!busy && SETUP.polling) { clearInterval(SETUP.polling); SETUP.polling = null; }
+}
+
+$('setup-recheck').onclick = () => checkSetup(true);
+$('setup-done').onclick = () => {
+  $('setup').hidden = true;
+  delete $('setup').dataset.sticky;
+  loadAgents(true);
+};
+checkSetup();

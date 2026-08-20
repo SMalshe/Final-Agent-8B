@@ -31,12 +31,26 @@ PROJECT = os.path.dirname(HERE)
 STATIC = os.path.join(HERE, "static")
 AGENTS_DIR = os.path.join(PROJECT, "agents")
 OLLAMA_URL = "http://127.0.0.1:11434"
+
+
+def default_model():
+    """The model the setup screen checks for when the page names none: the
+    first agent's configured tag."""
+    for name in agent_folders():
+        try:
+            with open(os.path.join(AGENTS_DIR, name, "config.json"),
+                      encoding="utf-8") as f:
+                return json.load(f).get("model") or ""
+        except Exception:
+            continue
+    return ""
 DEFAULT_PORT = 8765
 
 sys.path.insert(0, PROJECT)
 from harness import chat  # noqa: E402
 from harness import mcp_config  # noqa: E402
 from harness import profiles  # noqa: E402
+from webui import preflight  # noqa: E402
 
 # Rough per-size guidance for the picker; the machine, not the harness, decides.
 # Model facts from openrouter.ai, generated into model_catalog.json rather than
@@ -705,6 +719,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     {"name": name, "summary": summary,
                      "setup": mcp_config.setup_notes(name)}
                     for name, summary in mcp_config.available()])
+            if path == "/api/setup":
+                # What a first run needs before it can work, plus any download
+                # in flight. Polled by the setup screen.
+                model = q.get("model") or default_model()
+                checks = preflight.check(model)
+                return self.send_json({"checks": checks,
+                                       "ready": preflight.ready(checks),
+                                       "pull": preflight.PULL})
             if path == "/api/status":
                 run = RUNS.current
                 return self.send_json({"run": run.id if run else None,
@@ -751,6 +773,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                            "mcp_mode": body.get("mcp_mode") or None}
                 run = RUNS.start(agent, task, options)
                 return self.send_json({"run": run.id, "agent": agent})
+            if path == "/api/setup/fix":
+                # Only the named, safe actions in preflight.FIXES: install this
+                # interpreter's packages, start Ollama, pull a model. Installing
+                # Ollama itself stays a link the user clicks.
+                result = preflight.apply_fix(body.get("action", ""),
+                                             {"tag": body.get("tag") or default_model()})
+                return self.send_json({"ok": True, "result": result})
             if path == "/api/stop":
                 run = RUNS.current
                 if run:

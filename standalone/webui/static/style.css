@@ -1444,3 +1444,50 @@ table.grid td.formula::after { content: ' ƒ'; font-size: 9px; color: var(--ink-
 .rail-sum::before { content: "\203A "; display: inline-block; transition: transform .12s ease; }
 .rail-models[open] .rail-sum::before { transform: rotate(90deg); }
 .rail-sum:hover { color: var(--ink-dim); background: var(--accent-soft); }
+
+/* ---------------------------------------------------------------- setup ---
+   First run only. It covers the app rather than sitting beside it: until
+   Ollama is there and a model is on disk the console behind has nothing to
+   show, and a half-usable interface invites a run that cannot work. */
+.setup {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg); padding: 24px; overflow: auto;
+}
+.setup[hidden] { display: none; }
+.setup-card {
+  width: 100%; max-width: 620px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; padding: 30px 32px;
+}
+.setup-title { font-size: 23px; font-weight: 650; margin: 0 0 6px; color: var(--ink); }
+.setup-sub { margin: 0 0 22px; color: var(--ink-faint); font-size: 13.5px; line-height: 1.5; }
+.setup-steps { list-style: none; margin: 0; padding: 0; }
+.setup-step {
+  display: flex; gap: 13px; align-items: flex-start;
+  padding: 13px 0; border-top: 1px solid var(--line-soft);
+}
+.setup-step:first-child { border-top: 0; }
+.setup-dot {
+  flex: none; width: 19px; height: 19px; border-radius: 50%; margin-top: 1px;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+  background: var(--panel-2); color: var(--ink-faint);
+}
+.setup-step.ok .setup-dot      { background: var(--good-soft); color: var(--good); }
+.setup-step.warn .setup-dot    { background: var(--warn-soft); color: var(--warn); }
+.setup-step.fail .setup-dot,
+.setup-step.unknown .setup-dot { background: var(--bad-soft, rgba(224,98,94,.14)); color: var(--bad); }
+.setup-body { flex: 1; min-width: 0; }
+.setup-name { color: var(--ink); font-size: 14px; font-weight: 600; }
+.setup-detail { color: var(--ink-faint); font-size: 12.5px; margin-top: 3px; line-height: 1.45; }
+.setup-step .ghost, .setup-step .primary { flex: none; margin-top: 1px; }
+.setup-pull { margin-top: 18px; }
+.setup-bar {
+  height: 6px; border-radius: 3px; background: var(--panel-2); overflow: hidden;
+}
+.setup-bar > div { height: 100%; width: 0; background: var(--ink-dim); transition: width .3s; }
+.setup-pull-text { margin-top: 7px; font-size: 12px; color: var(--ink-faint); }
+.setup-foot {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; margin-top: 24px;
+}

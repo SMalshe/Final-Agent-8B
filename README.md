@@ -1,3 +1,35 @@
+# Agent Lab
+
+A private AI assistant that runs entirely on your own computer. It reads and
+writes your mail, calendar, files, decks and spreadsheets, and nothing you type
+or open ever leaves the machine.
+
+## Get it running
+
+1. **Install [Ollama](https://ollama.com/download)** — this is what runs the
+   model locally. Nothing else needs to be installed by hand.
+2. **Start Agent Lab.** Double-click `Agent Lab.command` on macOS, or
+   `Agent Lab.ps1` on Windows. The first launch installs the Python packages
+   and opens the app in its own window.
+3. **Follow the setup screen.** It checks the four things a run needs — the
+   packages, Ollama, the Ollama server, and the model — and offers to fix each
+   one it can, including downloading the model with a progress bar.
+
+That is the whole install. If you would rather do it yourself:
+
+```bash
+python3 -m pip install -r requirements.txt
+cd standalone && python3 -m webui.app
+```
+
+The app binds to loopback only, so it is reachable from this computer and
+nowhere else.
+
+**Requires** Python 3.9+ and roughly 6 GB of disk for an 8B model. It runs on
+CPU, so expect tens of seconds per step rather than an instant answer.
+
+---
+
 # Agent 8B — `llama3.1:8b`
 
 The reference agent. Same code, same tools, same harness as the other four

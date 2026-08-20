@@ -374,6 +374,25 @@
   </div>
 </div>
 
+<!-- First-run setup. Hidden unless something a run needs is missing, so an
+     installed machine never sees it. -->
+<div id="setup" class="setup" hidden>
+  <div class="setup-card" role="dialog" aria-label="Set up Agent Lab">
+    <h1 class="setup-title">Let's get you running</h1>
+    <p class="setup-sub">Everything here stays on this machine. Nothing you type
+      or open is sent anywhere.</p>
+    <ol id="setup-steps" class="setup-steps"></ol>
+    <div id="setup-pull" class="setup-pull" hidden>
+      <div class="setup-bar"><div id="setup-bar-fill"></div></div>
+      <div id="setup-pull-text" class="setup-pull-text"></div>
+    </div>
+    <div class="setup-foot">
+      <button id="setup-recheck" class="ghost" type="button">Check again</button>
+      <button id="setup-done" class="primary" type="button" disabled>Start using it</button>
+    </div>
+  </div>
+</div>
+
 <script src="/static/app.js"></script>
 </body>
 </html>
